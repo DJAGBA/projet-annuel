@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gan-stability-data"
+version = "0.1.0"
+description = "Couche data engineering pour la comparaison de stabilite DCGAN vs WGAN-GP"
+requires-python = ">=3.10"
+
+[tool.pytest.ini_options]
+# Rend `src.data.*` importable depuis les tests sans installation editable.
+pythonpath = ["."]
+testpaths = ["tests"]
+markers = [
+    "requires_download: test dependant d'un dataset telecharge (skip si absent)",
+    "slow: test long (FID, telechargements)",
+]

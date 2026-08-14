@@ -1,0 +1,48 @@
+# --- Données & artefacts (jamais versionnés) ---
+data/raw/*
+data/processed/*
+data/synthetic/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+!data/synthetic/.gitkeep
+
+# Sorties generees (grilles d'echantillons, caches FID, index de splits),
+# recreees a la demande par `utils.ensure_dirs()`.
+artifacts/
+
+# --- Secrets ---
+kaggle.json
+.env
+.env.*
+!.env.example
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+venv/
+.venv/
+env/
+
+# --- Tests & outils ---
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# --- Notebooks ---
+.ipynb_checkpoints/
+
+# --- IDE / OS ---
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+.claude

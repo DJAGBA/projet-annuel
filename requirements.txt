@@ -1,0 +1,26 @@
+# Python 3.10+
+# Installation : pip install -r requirements.txt
+
+# --- Coeur numerique ---
+numpy>=1.24
+pandas>=2.0
+scipy>=1.10
+
+# --- Deep learning ---
+torch>=2.1
+torchvision>=0.16
+
+# --- Preprocessing / persistance ---
+scikit-learn>=1.3
+joblib>=1.3
+
+# --- Evaluation (FID) ---
+# L'extra [image] tire torch-fidelity, requis par FrechetInceptionDistance
+torchmetrics[image]>=1.2
+
+# --- Ingestion Kaggle (optionnelle : fallback manuel documente dans le README) ---
+kagglehub>=0.3
+kaggle>=1.6
+
+# --- Tests ---
+pytest>=7.4
