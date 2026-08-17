@@ -42,6 +42,21 @@ def test_tabular_config_is_coherent() -> None:
     assert config.TIME_STRATEGY in ("drop", "cyclical")
 
 
+def test_fid_config_is_coherent() -> None:
+    assert config.FID_FEATURE_DIM in (64, 192, 768, 2048)
+    assert config.FID_SPLIT in ("train", "test")
+    assert config.FID_BATCH_SIZE > 0
+
+
+def test_fid_sample_count_supports_a_stable_covariance() -> None:
+    """`sigma` est carree de cote FID_FEATURE_DIM : sous ce seuil, elle est singuliere."""
+    if config.FID_NUM_SAMPLES is not None:
+        assert config.FID_NUM_SAMPLES > config.FID_FEATURE_DIM, (
+            f"{config.FID_NUM_SAMPLES} images ne suffisent pas a estimer une "
+            f"covariance {config.FID_FEATURE_DIM}x{config.FID_FEATURE_DIM}."
+        )
+
+
 def test_set_seed_makes_all_rng_sources_reproducible() -> None:
     def draw() -> tuple[float, np.ndarray, torch.Tensor]:
         set_seed(config.SEED)

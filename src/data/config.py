@@ -183,6 +183,24 @@ PROCESSED_METADATA: str = f"{PROCESSED_PREFIX}_metadata.json"
 #: Couche Inception-v3 utilisee (2048 = pool3, la convention de la litterature).
 FID_FEATURE_DIM: int = 2048
 FID_BATCH_SIZE: int = int(os.environ.get("GAN_FID_BATCH_SIZE", 64))
-#: `None` = tout le split. Reduire pour un calcul rapide (au prix du biais FID).
-FID_NUM_SAMPLES: int | None = None
+
+#: Nombre d'images reelles servant de reference FID.
+#:
+#: 10 000 est un compromis assume. Deux bornes l'encadrent :
+#: - plancher : `sigma` est une matrice `FID_FEATURE_DIM x FID_FEATURE_DIM`
+#:   (2048^2). L'estimer sur moins de ~2048 images la rend singuliere et le FID
+#:   devient numeriquement instable ;
+#: - plafond : sur CPU, Inception traite ~6 images/s, soit ~5 h pour les splits
+#:   complets des deux datasets.
+#:
+#: Le FID absolu obtenu n'est pas comparable aux valeurs publiees (calculees sur
+#: le split entier), mais la comparaison DCGAN / WGAN-GP reste valide : les deux
+#: sont mesures contre cette meme reference.
+#:
+#: `GAN_FID_NUM_SAMPLES=full` (ou `none`) retablit le split complet.
+_FID_SAMPLES_ENV: str = os.environ.get("GAN_FID_NUM_SAMPLES", "10000")
+FID_NUM_SAMPLES: int | None = (
+    None if _FID_SAMPLES_ENV.lower() in ("none", "full", "0") else int(_FID_SAMPLES_ENV)
+)
+
 FID_SPLIT: Literal["train", "test"] = "train"
