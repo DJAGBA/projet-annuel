@@ -10,6 +10,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from pathlib import Path
 
+import numpy as np
+import pandas as pd
 import pytest
 from torch.utils.data import DataLoader
 
@@ -75,3 +77,41 @@ def creditcard_csv() -> Path:
             "Lancer `python -m src.data.tabular --download` (cf. README)."
         )
     return config.CREDITCARD_CSV
+
+
+#: Taille du jeu synthetique : assez grand pour que 0.17 % de fraudes reste
+#: stratifiable (34 fraudes -> ~7 dans un test a 20 %), assez petit pour rester
+#: instantane en CI.
+SYNTHETIC_ROWS: int = 20_000
+SYNTHETIC_FRAUDS: int = 34
+
+
+@pytest.fixture(scope="session")
+def synthetic_creditcard() -> pd.DataFrame:
+    """DataFrame au schema de Credit Card Fraud, sans dependre du telechargement.
+
+    Reproduit les trois proprietes qui pilotent le preprocessing : le
+    desequilibre extreme (~0.17 %), la queue lourde d'`Amount` (lognormale) et
+    `Time` comme compteur de secondes depuis la premiere transaction.
+    """
+    rng = np.random.default_rng(0)
+
+    columns: dict[str, np.ndarray] = {
+        # 2 jours de collecte, comme le dataset reel.
+        config.TIME_COL: np.sort(rng.uniform(0, 2 * config.SECONDS_PER_DAY, SYNTHETIC_ROWS)),
+    }
+
+    labels = np.zeros(SYNTHETIC_ROWS, dtype=np.int64)
+    labels[rng.choice(SYNTHETIC_ROWS, SYNTHETIC_FRAUDS, replace=False)] = config.FRAUD_LABEL
+    is_fraud = labels == config.FRAUD_LABEL
+
+    for index, name in enumerate(config.V_COLUMNS):
+        values = rng.normal(0.0, 1.0, SYNTHETIC_ROWS)
+        # Decalage des fraudes : sans signal, un test de separabilite serait vide.
+        values[is_fraud] += 1.5 if index % 2 == 0 else -1.5
+        columns[name] = values
+
+    columns[config.AMOUNT_COL] = rng.lognormal(3.0, 1.6, SYNTHETIC_ROWS)
+    columns[config.TARGET_COL] = labels
+
+    return pd.DataFrame(columns)
