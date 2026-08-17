@@ -7,11 +7,14 @@ skippes avec un message actionnable, jamais en echec.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
+from torch.utils.data import DataLoader
 
 from src.data import config
+from src.data.images import get_image_dataloader
 from src.data.utils import ensure_dirs, set_seed
 
 
@@ -25,6 +28,42 @@ def _deterministic_environment() -> None:
 def _project_dirs() -> None:
     """Garantit l'existence de l'arborescence de travail."""
     ensure_dirs()
+
+
+@pytest.fixture
+def image_loaders() -> Callable[..., tuple[DataLoader, DataLoader]]:
+    """Fabrique de DataLoaders images, ou skip si le dataset n'est pas sur disque.
+
+    Volontairement **sans cache** : chaque appel reconstruit des `DataLoader`
+    neufs. Un `DataLoader` partage verrait son `torch.Generator` avancer d'une
+    iteration a l'autre (comportement normal entre deux epoques), ce qui rendrait
+    les tests de reproductibilite faussement rouges.
+    """
+
+    def _build(
+        dataset_name: str,
+        *,
+        seed: int = config.SEED,
+        batch_size: int = 16,
+        **kwargs: object,
+    ) -> tuple[DataLoader, DataLoader]:
+        try:
+            return get_image_dataloader(
+                dataset_name,
+                batch_size=batch_size,
+                seed=seed,
+                num_workers=0,
+                download=False,
+                **kwargs,  # type: ignore[arg-type]
+            )
+        except (RuntimeError, FileNotFoundError) as exc:
+            pytest.skip(
+                f"Dataset {dataset_name!r} absent de {config.DATA_RAW}. "
+                f"Lancer `python -m src.data.images --dataset {dataset_name}`. "
+                f"({type(exc).__name__})"
+            )
+
+    return _build
 
 
 @pytest.fixture(scope="session")
