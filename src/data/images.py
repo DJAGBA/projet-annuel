@@ -14,6 +14,7 @@ la distribution des donnees.
 
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 
 import torch
@@ -26,6 +27,7 @@ from src.data import config
 from src.data.config import ImageDatasetSpec
 from src.data.utils import (
     ensure_dirs,
+    hash_array,
     make_generator,
     resolve_pin_memory,
     seed_worker,
@@ -38,6 +40,7 @@ __all__ = [
     "get_image_dataloader",
     "denormalize",
     "sanity_check_batch",
+    "batch_order_fingerprint",
     "save_sample_grid",
 ]
 
@@ -332,6 +335,34 @@ def sanity_check_batch(
         "mean": float(images.mean()),
         "std": float(images.std()),
     }
+
+
+def batch_order_fingerprint(loader: DataLoader, n_batches: int = 3) -> str:
+    """Empreinte des premiers batchs servis par un `DataLoader`.
+
+    Equivalent, pour le pipeline images, de `splits.split_fingerprint` : permet
+    d'affirmer que deux runs (DCGAN et WGAN-GP, par exemple) ont consomme la
+    meme sequence de donnees, sans avoir a conserver les images elles-memes.
+
+    Note:
+        Iterer un `DataLoader` melange fait avancer son `torch.Generator`. Cette
+        fonction doit donc etre appelee sur un loader **neuf** pour etre
+        comparable a un autre appel -- typiquement juste apres construction.
+
+    Args:
+        loader: DataLoader a inspecter.
+        n_batches: Nombre de batchs a integrer a l'empreinte.
+
+    Returns:
+        L'empreinte hexadecimale de la sequence.
+    """
+    digest = hashlib.sha256()
+    for index, (images, labels) in enumerate(loader):
+        if index >= n_batches:
+            break
+        digest.update(hash_array(images.numpy()).encode())
+        digest.update(hash_array(labels.numpy()).encode())
+    return digest.hexdigest()
 
 
 def save_sample_grid(

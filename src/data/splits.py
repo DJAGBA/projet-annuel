@@ -26,6 +26,8 @@ __all__ = [
     "stratified_indices",
     "split_fingerprint",
     "assert_disjoint",
+    "assert_same_split",
+    "verify_split_reproducibility",
     "class_balance",
     "save_split_indices",
     "load_split_indices",
@@ -115,6 +117,73 @@ def assert_disjoint(train_index: np.ndarray, test_index: np.ndarray) -> None:
     )
     assert np.unique(train_index).size == train_index.size, "Doublons dans le train."
     assert np.unique(test_index).size == test_index.size, "Doublons dans le test."
+
+
+def assert_same_split(
+    reference: str,
+    candidate: str,
+    *,
+    context: str = "",
+) -> None:
+    """Verifie que deux runs ont bien travaille sur la meme partition.
+
+    A appeler avant de comparer deux architectures : un ecart de FID entre
+    DCGAN et WGAN-GP n'est attribuable a l'architecture que si les deux ont vu
+    exactement le meme decoupage.
+
+    Args:
+        reference: Empreinte de reference.
+        candidate: Empreinte a verifier.
+        context: Precision ajoutee au message d'erreur (nom du run, dataset).
+
+    Raises:
+        AssertionError: Si les empreintes different.
+    """
+    suffix = f" ({context})" if context else ""
+    assert reference == candidate, (
+        f"Les deux runs n'ont pas vu le meme split{suffix} : "
+        f"{reference[:16]}... vs {candidate[:16]}.... "
+        "Toute comparaison de metriques entre ces runs est invalide."
+    )
+
+
+def verify_split_reproducibility(
+    y: np.ndarray,
+    *,
+    test_size: float = config.TEST_SIZE,
+    seed: int = config.SEED,
+    n_runs: int = 3,
+) -> str:
+    """Rejoue le split plusieurs fois et exige un resultat identique.
+
+    Verification active, executable avant un run d'entrainement : elle constate
+    le determinisme sur la machine courante au lieu de le supposer.
+
+    Args:
+        y: Vecteur d'etiquettes de stratification.
+        test_size: Proportion du jeu de test.
+        seed: Graine a verifier.
+        n_runs: Nombre de repetitions.
+
+    Returns:
+        L'empreinte commune aux `n_runs` executions.
+
+    Raises:
+        AssertionError: Si deux executions divergent.
+        ValueError: Si `n_runs` est inferieur a 2.
+    """
+    if n_runs < 2:
+        raise ValueError(f"n_runs doit valoir au moins 2, recu {n_runs}.")
+
+    reference = ""
+    for run in range(n_runs):
+        train_index, test_index = stratified_indices(y, test_size=test_size, seed=seed)
+        fingerprint = split_fingerprint(train_index, test_index)
+        if run == 0:
+            reference = fingerprint
+        else:
+            assert_same_split(reference, fingerprint, context=f"run {run + 1}/{n_runs}")
+    return reference
 
 
 def class_balance(y: np.ndarray) -> dict[int, float]:

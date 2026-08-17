@@ -39,10 +39,12 @@ from sklearn.preprocessing import StandardScaler
 from src.data import config
 from src.data.splits import (
     assert_disjoint,
+    assert_same_split,
     class_balance,
     split_fingerprint,
     stratified_indices,
 )
+from src.data.utils import hash_array
 
 __all__ = [
     "TabularSplit",
@@ -51,6 +53,7 @@ __all__ = [
     "describe_imbalance",
     "build_features",
     "preprocess_tabular",
+    "verify_preprocessing_reproducibility",
     "extract_minority",
     "save_processed",
     "load_processed",
@@ -448,6 +451,59 @@ def preprocess_tabular(
         time_strategy=time_strategy,
         amount_log1p=amount_log1p,
     )
+
+
+def verify_preprocessing_reproducibility(
+    frame: pd.DataFrame,
+    *,
+    seed: int = config.SEED,
+    n_runs: int = 2,
+    **kwargs: object,
+) -> str:
+    """Rejoue tout le pipeline et exige des sorties bit a bit identiques.
+
+    Plus exigeant que `splits.verify_split_reproducibility` : deux runs
+    pourraient partager le meme decoupage et diverger malgre tout sur les
+    valeurs scalees. Cette fonction verifie la chaine complete -- indices,
+    matrices scalees et parametres du scaler.
+
+    Args:
+        frame: DataFrame source.
+        seed: Graine a verifier.
+        n_runs: Nombre de repetitions.
+        **kwargs: Transmis a `preprocess_tabular`.
+
+    Returns:
+        L'empreinte du split commune aux executions.
+
+    Raises:
+        AssertionError: Si deux executions divergent.
+        ValueError: Si `n_runs` est inferieur a 2.
+    """
+    if n_runs < 2:
+        raise ValueError(f"n_runs doit valoir au moins 2, recu {n_runs}.")
+
+    reference: TabularSplit | None = None
+    for run in range(n_runs):
+        current = preprocess_tabular(seed, frame=frame, **kwargs)  # type: ignore[arg-type]
+        if reference is None:
+            reference = current
+            continue
+
+        context = f"run {run + 1}/{n_runs}"
+        assert_same_split(reference.fingerprint, current.fingerprint, context=context)
+        for name in ("X_train", "X_test", "y_train", "y_test"):
+            assert hash_array(getattr(reference, name)) == hash_array(
+                getattr(current, name)
+            ), f"{name} differe entre deux executions a seed identique ({context})."
+        np.testing.assert_array_equal(
+            reference.scaler.mean_,
+            current.scaler.mean_,
+            err_msg=f"Le scaler differe entre deux executions ({context}).",
+        )
+
+    assert reference is not None  # garanti par n_runs >= 2
+    return reference.fingerprint
 
 
 def extract_minority(
