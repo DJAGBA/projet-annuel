@@ -1,0 +1,11 @@
+services:
+  gan-backend:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      # Persiste les modèles importés même si le conteneur redémarre,
+      # et permet au ML engineer de déposer ses fichiers directement
+      # dans ./data/models sur la machine hôte.
+      - ./data:/app/data
+    restart: unless-stopped
