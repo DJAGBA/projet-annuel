@@ -1,6 +1,8 @@
 import asyncio
+import json
+from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, File, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.model_contract import ModelContractError, load_generator
@@ -126,6 +128,54 @@ async def import_external_model(run_id: str):
     # pour qu'il soit utilisable par /samples et compté dans /stability.
     # metrics (fid/diversity) est optionnel : présent pour les runs Colab,
     # absent si le ML engineer ne fournit pas ce fichier hors-contrat.
+    state = manager.import_run(run_id=config.run_id, model_type=config.model_type,
+                                dataset=config.dataset, seed=config.seed,
+                                epochs_trained=config.epochs_trained,
+                                converged=config.converged,
+                                mode_collapse_detected=config.mode_collapse_detected,
+                                generator=generator, latent_dim=config.latent_dim,
+                                last_fid=(metrics or {}).get("fid"),
+                                last_diversity=(metrics or {}).get("diversity"))
+    return _to_summary(state)
+
+
+@app.post("/api/models/upload", response_model=RunSummary)
+async def upload_model(
+    generator_file: UploadFile = File(..., description="generator.pt"),
+    config_file: UploadFile = File(..., description="config.json"),
+    metrics_file: UploadFile | None = File(None, description="metrics.json (optionnel)"),
+):
+    """Upload direct d'un modèle entraîné (generator.pt + config.json [+ metrics.json])
+    via le navigateur, sans avoir besoin d'accès au système de fichiers du serveur.
+    Nécessaire sur les plateformes comme Render en plan gratuit, où le disque est
+    éphémère et où il n'y a pas d'accès SSH pour déposer manuellement des fichiers.
+
+    ATTENTION : sur un plan gratuit à disque éphémère, ces fichiers seront perdus
+    au prochain redémarrage du service (veille par inactivité, redéploiement).
+    Il faut réimporter les modèles à chaque fois avant une démonstration.
+    """
+    config_bytes = await config_file.read()
+    try:
+        raw = json.loads(config_bytes)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(422, f"config.json n'est pas un JSON valide : {exc}") from exc
+
+    run_id = raw.get("run_id")
+    if not run_id:
+        raise HTTPException(422, "Le champ 'run_id' est manquant dans config.json")
+
+    model_dir = Path(MODELS_DIR) / run_id
+    model_dir.mkdir(parents=True, exist_ok=True)
+    (model_dir / "config.json").write_bytes(config_bytes)
+    (model_dir / "generator.pt").write_bytes(await generator_file.read())
+    if metrics_file is not None:
+        (model_dir / "metrics.json").write_bytes(await metrics_file.read())
+
+    try:
+        generator, config, metrics = load_generator(model_dir)
+    except ModelContractError as exc:
+        raise HTTPException(422, str(exc)) from exc
+
     state = manager.import_run(run_id=config.run_id, model_type=config.model_type,
                                 dataset=config.dataset, seed=config.seed,
                                 epochs_trained=config.epochs_trained,
