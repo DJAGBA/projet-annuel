@@ -16,7 +16,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.model_contract import ModelContractError, load_generator
 from app.schemas import (
     CreateRunRequest,
-    LossHistoryResponse,
     LossPoint,
     RunStatus,
     RunSummary,
@@ -78,9 +77,9 @@ async def get_run(run_id: str):
     return _to_summary(state)
 
 
-@app.get("/api/runs/{run_id}/losses", response_model=LossHistoryResponse)
+@app.get("/api/runs/{run_id}/losses", response_model=list[LossPoint])
 async def get_losses(run_id: str):
-    """Historique complet des pertes (utile pour tracer la courbe).
+    """Historique complet des pertes sous forme de liste JSON directe.
 
     Si le modèle est importé sans historique étape par étape, génère une courbe
     synthétique déterministe et réaliste basée sur le modèle.
@@ -125,16 +124,7 @@ async def get_losses(run_id: str):
             )
         losses = generated_losses
 
-    return LossHistoryResponse(
-        run_id=run_id,
-        is_imported=is_imported,
-        message=(
-            "Courbe de convergence restituée avec succès."
-            if is_imported
-            else "Historique des pertes récupéré avec succès."
-        ),
-        losses=losses,
-    )
+    return losses
 
 
 @app.get("/api/runs/{run_id}/samples")
