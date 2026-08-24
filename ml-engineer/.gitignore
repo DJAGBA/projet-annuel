@@ -1,0 +1,20 @@
+# Environnements / cache Python
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# Donnees telechargees localement (Fashion-MNIST, etc.)
+data/
+
+# MLflow — tracking local, ne doit pas etre commit (gros fichiers binaires,
+# change a chaque run, source de conflits de merge inutiles)
+mlruns/
+mlflow.db
+mlflow_local/
+
+# Checkpoints de modeles — trop volumineux pour Git standard
+*.pt
+*.pth
+
+# Exports Backend (generator.pt + config.json) — restent sur Drive
+exports/
