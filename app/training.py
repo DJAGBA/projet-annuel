@@ -1,6 +1,8 @@
 import asyncio
 import base64
 import io
+import os
+import shutil
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -104,10 +106,19 @@ class TrainingManager:
             transforms.Normalize([0.5] * (1 if req.dataset.value == "fashion_mnist" else 3),
                                   [0.5] * (1 if req.dataset.value == "fashion_mnist" else 3)),
         ])
-        if req.dataset.value == "fashion_mnist":
-            ds = datasets.FashionMNIST(DATA_ROOT, train=True, download=True, transform=tfm)
-        else:
-            ds = datasets.CIFAR10(DATA_ROOT, train=True, download=True, transform=tfm)
+        
+        is_fashion = req.dataset.value == "fashion_mnist"
+        dataset_class = datasets.FashionMNIST if is_fashion else datasets.CIFAR10
+        target_folder = os.path.join(DATA_ROOT, "FashionMNIST" if is_fashion else "cifar-10-batches-py")
+
+        try:
+            ds = dataset_class(DATA_ROOT, train=True, download=True, transform=tfm)
+        except Exception:
+            # En cas de téléchargement interrompu ou corrompu, on supprime le dossier et on réessaie
+            if os.path.exists(target_folder):
+                shutil.rmtree(target_folder, ignore_errors=True)
+            ds = dataset_class(DATA_ROOT, train=True, download=True, transform=tfm)
+
         return DataLoader(ds, batch_size=req.batch_size, shuffle=True, drop_last=True, num_workers=2)
 
     # ---------- FID (qualité de génération, livrable requis) ----------
