@@ -6,7 +6,7 @@ from fastapi import FastAPI, File, HTTPException, UploadFile, WebSocket, WebSock
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.model_contract import ModelContractError, load_generator
-from app.schemas import CreateRunRequest, RunSummary, RunStatus, StabilityRow
+from app.schemas import CreateRunRequest, LossHistoryResponse, RunSummary, RunStatus, StabilityRow
 from app.training import manager
 
 MODELS_DIR = "data/models"  # dossier partagé (relatif au dossier où tu lances uvicorn) où le ML engineer / Colab dépose ses runs
@@ -186,6 +186,25 @@ async def upload_model(
                                 last_diversity=(metrics or {}).get("diversity"))
     return _to_summary(state)
 
+@app.get("/api/runs/{run_id}/losses", response_model=LossHistoryResponse)
+def get_run_losses(run_id: str):
+    run = manager.get_run(run_id)
+    if not run:
+        raise HTTPException(status_code=404, detail="Run non trouvé")
+
+    # Si la liste des pertes est vide ou si le flag is_imported est à True
+    is_imported = getattr(run, "is_imported", False) or len(run.losses) == 0
+
+    return LossHistoryResponse(
+        run_id=run_id,
+        is_imported=is_imported,
+        message=(
+            "Modèle pré-entraîné importé : aucun historique de loss enregistré étape par étape."
+            if is_imported
+            else "Historique des pertes récupéré avec succès."
+        ),
+        losses=run.losses if not is_imported else [],
+    )
 
 @app.get("/api/health")
 async def health():
